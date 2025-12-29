@@ -1,0 +1,7 @@
+numpy
+pandas
+tqdm
+opencv-python
+matplotlib
+mlflow
+Pillow
