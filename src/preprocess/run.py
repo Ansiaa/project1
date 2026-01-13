@@ -20,8 +20,6 @@ def sample_per_object(df: pd.DataFrame, obj: str, n: int, seed: int = 42) -> pd.
     if len(sub) == 0:
         return sub
 
-    rng = np.random.default_rng(seed)
-
     normal = sub[sub["split"] == "normal"]
     anomaly = sub[sub["split"] == "anomaly"]
 
@@ -70,6 +68,22 @@ def save_grid_pairs(pairs: list[tuple[np.ndarray, np.ndarray]], out_png: Path, m
     plt.close(fig)
 
 
+def resolve_grid_path(save_grid: Path, obj: str, objects: list[str]) -> Path:
+    """
+    - save_grid에 '{obj}' 템플릿이 있으면 치환: ablation_grid_{obj}.png
+    - 템플릿이 없고 objects가 2개 이상이면 stem 뒤에 _{obj}를 붙임
+    - objects가 1개면 원래 save_grid 그대로
+    """
+    s = str(save_grid)
+    if "{obj}" in s:
+        return Path(s.format(obj=obj))
+
+    if len(objects) > 1:
+        return save_grid.with_name(f"{save_grid.stem}_{obj}{save_grid.suffix}")
+
+    return save_grid
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--index", type=str, default="data/raw/index_pcb4_cashew.csv")
@@ -102,7 +116,7 @@ def main():
         chosen.append(part)
     df_s = pd.concat(chosen, axis=0).reset_index(drop=True)
 
-    pairs_for_grid: list[tuple[np.ndarray, np.ndarray]] = []
+    pairs_for_grid_by_obj: dict[str, list[tuple[np.ndarray, np.ndarray]]] = {obj: [] for obj in args.objects}
     saved = 0
 
     for _, r in tqdm(df_s.iterrows(), total=len(df_s)):
@@ -123,13 +137,20 @@ def main():
         imwrite(out_path, after)
         saved += 1
 
-        if len(pairs_for_grid) < 8:
-            pairs_for_grid.append((before, after))
+        obj = str(r["object"])
+        lst = pairs_for_grid_by_obj.get(obj)
+        if lst is not None and len(lst) < 8:
+            lst.append((before, after))
 
-    save_grid_pairs(pairs_for_grid, grid_png, max_rows=8)
+    for obj in args.objects:
+        pairs = pairs_for_grid_by_obj.get(obj, [])
+        if len(pairs) == 0:
+            continue
+        out_grid = resolve_grid_path(grid_png, obj=obj, objects=args.objects)
+        save_grid_pairs(pairs, out_grid, max_rows=8)
+        print(f"[OK] grid saved: {out_grid}")
 
     print(f"[OK] saved processed images: {saved} -> {out_root}")
-    print(f"[OK] grid saved: {grid_png}")
 
 
 if __name__ == "__main__":
